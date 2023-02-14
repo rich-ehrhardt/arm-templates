@@ -441,7 +441,7 @@
         },
         {
             "type": "Microsoft.OperationalInsights/workspaces",
-            "apiVersion": "2021-12-01-preview",
+            "apiVersion": "2022-10-01",
             "name": "[variables('workspaceName')]",
             "location": "[parameters('location')]",
             "properties": {
