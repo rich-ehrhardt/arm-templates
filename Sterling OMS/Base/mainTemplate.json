@@ -436,7 +436,8 @@
                 "version": "[parameters('dbVersion')]"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', variables('privateDNSZoneName'), format('{0}-link', variables('privateDNSZoneName')))]"
             ]
         },
         {
