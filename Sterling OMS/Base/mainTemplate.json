@@ -59,9 +59,16 @@
                 "description": "CIDR for the development subnet"
             }
         },
-        "bastionSubnetCIDR": {
+        "natSubnetCIDR": {
             "type": "string",
             "defaultValue": "10.0.5.0/24",
+            "metadata": {
+                "description": "CIDR for the outbound subnet"
+            }
+        },
+        "bastionSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.6.0/24",
             "metadata": {
                 "description": "CIDR for the bastion subnet"
             }
@@ -127,6 +134,27 @@
             "metadata": {
                 "description": "Flag to determine whether to deploy Log Analytics"
             }
+        },
+        "storageSuffix": {
+            "type": "string",
+            "defaultValue": "core.windows.net",
+            "metadata": {
+                "description": "DNS suffix for storage"
+            }
+        },
+        "privateStorageEndpointName": {
+            "type": "string",
+            "defaultValue": "oms-pe-premiumstorage",
+            "metadata": {
+                "description": "Name of the private endpoint for the storage"
+            }
+        },
+        "mqsharename": {
+            "type": "string",
+            "defaultValue": "mqha",
+            "metadata": {
+                "description": "name of the Azure Premium File Share to create MQ instance"
+            }
         }
     },
     "variables": {
@@ -136,15 +164,20 @@
         "endpointSubnetName": "[concat(parameters('namePrefix'), '-endpoint-subnet')]",
         "dataSubnetName": "[concat(parameters('namePrefix'), '-data-subnet')]",
         "devSubnetName": "[concat(parameters('namePrefix'),'-dev-subnet')]",
+        "natSubnetName": "[concat(parameters('namePrefix'), '-nat-subnet')]",
+        "gwPublicIPName": "[concat(parameters('namePrefix'), '-gw-public-ip')]",
+        "natGwName": "[concat(parameters('namePrefix'), '-nat-gw')]",
         "bastionSubnetName": "AzureBastionSubnet",
-        "publicIpAddressName": "[concat(parameters('namePrefix'), '-bastion-public-ip')]",
+        "bastionIPName": "[concat(parameters('namePrefix'), '-bastion-public-ip')]",
         "bastionNSGName": "[concat(parameters('namePrefix'), '-bastion-nsg')]",
         "bastionHostName": "[concat(parameters('namePrefix'), '-bastion-vm')]",
-        "privateDNSZoneName": "omspostgres.private.postgres.database.azure.com",
-        "privateDNSLinkName": "[concat(variables('privateDNSZoneName'), '/', variables('privateDNSZoneName'), '-link')]",
+        "dbDNSZoneName": "omspostgres.private.postgres.database.azure.com",
         "postgreSQLName": "[concat(parameters('namePrefix'),'-postgresql')]",
         "dbDiagSettingsName": "[concat(variables('postgreSQLName'),'-diag-settings')]",
-        "workspaceName": "[concat(parameters('namePrefix'), '-log-analytics-workspace')]"
+        "workspaceName": "[concat(parameters('namePrefix'), '-log-analytics-workspace')]",
+        "storageAccountName": "[concat(parameters('namePrefix'), 'filesprm')]",
+        "storageDNSZoneName": "[concat('privatelink.file.',parameters('storageSuffix'))]",
+        "fileStorageAccountPrivateEndpointGroupName": "file"
     },
     "resources": [
         {
@@ -206,6 +239,15 @@
                         }
                     },
                     {
+                        "name": "[variables('natSubnetName')]",
+                        "properties": {
+                            "addressPrefix": "[parameters('natSubnetCIDR')]",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
+                            }
+                        } 
+                    },
+                    {
                         "name": "[variables('bastionSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('bastionSubnetCIDR')]",
@@ -217,13 +259,45 @@
                 ]
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('bastionNSGName'))]"
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('bastionNSGName'))]",
+                "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
             ]
         },
         {
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2022-07-01",
-            "name": "[variables('publicIpAddressName')]",
+            "name": "[variables('gwPublicIPName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "sku": {
+                "name": "Standard"
+            }
+        },
+        {
+            "type": "Microsoft.Network/natGateways",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('natGwName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIpAddresses": [
+                    {
+                        "id": "[resourceId('Microsoft.Network/publicIpAddresses/', variables('gwPublicIPName'))]"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('gwPublicIPName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('bastionIPName')]",
             "location": "[parameters('location')]",
             "sku": {
                 "name": "Standard"
@@ -369,7 +443,7 @@
                                 "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('bastionSubnetName'))]"
                             },
                             "publicIPAddress": {
-                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]"
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('bastionIPName'))]"
                             }
                         }
                     }
@@ -377,13 +451,13 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
-                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]"
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('bastionIPName'))]"
             ]
         },
         {
             "type": "Microsoft.Network/privateDnsZones",
             "apiVersion": "2020-06-01",
-            "name": "[variables('privateDNSZoneName')]",
+            "name": "[variables('dbDNSZoneName')]",
             "location": "global",
             "properties": {},
             "dependsOn": [
@@ -393,7 +467,7 @@
         {
             "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
             "apiVersion": "2020-06-01",
-            "name": "[variables('privateDNSLinkName')]",
+            "name": "[concat(variables('dbDNSZoneName'), '/', variables('dbDNSZoneName'), '-link')]",
             "location": "global",
             "properties": {
                 "registrationEnabled": false,
@@ -403,7 +477,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
-                "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDNSZoneName'))]"
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('dbDNSZoneName'))]"
             ]
         },
         {
@@ -428,7 +502,7 @@
                 },
                 "network": {
                     "delegatedSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('dataSubnetName'))]",
-                    "privateDnsZoneArmResourceId": "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDNSZoneName'))]"
+                    "privateDnsZoneArmResourceId": "[resourceId('Microsoft.Network/privateDnsZones', variables('dbDNSZoneName'))]"
                 },
                 "storage": {
                     "storageSizeGB": "[parameters('dbStorageSizeGB')]"
@@ -437,7 +511,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]",
-                "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', variables('privateDNSZoneName'), format('{0}-link', variables('privateDNSZoneName')))]"
+                "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', variables('dbDNSZoneName'), format('{0}-link', variables('dbDNSZoneName')))]"
             ]
         },
         {
@@ -475,6 +549,171 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgreSQLName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-06-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "kind": "FileStorage",
+            "sku": {
+                "name": "Premium_LRS"
+            },
+            "properties": {
+                "allowSharedKeyAccess": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "supportsHttpsTrafficOnly": false,
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Deny"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/privateDnsZones",
+            "apiVersion": "2020-06-01",
+            "name": "[variables('storageDNSZoneName')]",
+            "location": "global",
+            "properties": {},
+            "dependsOn": [
+                "[variables('vnetName')]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+            "apiVersion": "2020-06-01",
+            "name": "[concat(variables('storageDNSZoneName'),'/',variables('vnetName'),'-link')]",
+            "location": "global",
+            "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('storageDNSZoneName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints",
+            "apiVersion": "2021-03-01",
+            "name": "[parameters('privateStorageEndpointName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "subnet": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('endpointSubnetName'))]"
+                },
+                "privateLinkServiceConnections": [
+                    {
+                        "name": "[parameters('privateStorageEndpointName')]",
+                        "properties": {
+                            "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts',variables('storageAccountName'))]",
+                            "groupIds": [
+                                "[variables('fileStorageAccountPrivateEndpointGroupName')]"
+                            ]
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('privateStorageEndpointName'),'/','dnsgroupname')]",
+            "properties": {
+                "privateDnsZoneConfigs": [
+                    {
+                        "name": "premium",
+                        "properties": {
+                            "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('storageDNSZoneName'))]"
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints',parameters('privateStorageEndpointName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2021-08-01",
+            "name": "[concat(variables('storageAccountName'),'/default')]",
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "protocolSettings": {
+                    "smb": {
+                        "multichannel": {
+                            "enabled": false
+                        }
+                    }
+                },
+                "shareDeleteRetentionPolicy": {
+                    "days": 7,
+                    "enabled": true
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2021-08-01",
+            "name": "[concat(variables('storageAccountName'),'/default/',parameters('mqsharename'))]",
+            "properties": {
+                "accessTier": "Premium",
+                "enabledProtocols": "NFS",
+                "metadata": {},
+                "rootSquash": "NoRootSquash",
+                "shareQuota": 100
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/diagnosticSettings",
+            "apiVersion": "2021-05-01-preview",
+            "condition": "[parameters('deployLogAnalytics')]",
+            "name": "[concat(variables('storageAccountName'),'-fileshares')]",
+            "scope": "[format('Microsoft.Storage/storageAccounts/{0}/fileServices/{1}', variables('storageAccountName'), variables('storageAccountName'))]",
+            "properties": {
+                "logAnalyticsDestinationType": "AzureDiagnostics",
+                "logs": [
+                    {
+                        "category": "StorageDelete",
+                        "enabled": true
+                    },
+                    {
+                        "category": "StorageRead",
+                        "enabled": true
+                    },
+                    {
+                        "category": "StorageWrite",
+                        "enabled": true
+                    }
+                ],
+                "metrics": [
+                    {
+                        "category": "Transaction",
+                        "enabled": true
+                    }
+                ],
+                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces',variables('workspaceName'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts',variables('storageAccountName'))]"
             ]
         }
     ]
