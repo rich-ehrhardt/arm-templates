@@ -206,6 +206,9 @@
         "devVmZone": {
             "type": "string",
             "defaultValue": "1",
+            "allowedValues": [
+                "1", "2", "3"
+            ],
             "metadata": {
                 "description": "Availability zone for the Dev VM"
             }
@@ -217,6 +220,49 @@
                 "18.04-LTS",
                 "20.04-LTS"
             ]
+        },
+        "mqVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_B2ms",
+            "metadata": {
+                "description": "MQ VM Size"
+            }
+        },
+        "mqVmDiskType": {
+            "type": "string",
+            "defaultValue": "Premium_LRS",
+            "allowedValues": [
+                "Premium_LRS",
+                "Premium_ZRS",
+                "UltraSSD_LRS"
+            ],
+            "metadata": {
+                "description": "OS Disk type for MQ VM"
+            }
+        },
+        "mqVmOsVersion": {
+            "type": "string",
+            "defaultValue": "8.2",
+            "metadata": {
+                "description": "RHEL Version for MQ VM"
+            }
+        },
+        "mqVmZone": {
+            "type": "string",
+            "defaultValue": "1",
+            "allowedValues": [
+                "1", "2", "3"
+            ],
+            "metadata": {
+                "description": "Availability zone for MQ VM"
+            }
+        },
+        "mqVmBootstrap": {
+            "type": "string",
+            "defaultValue": "[concat('#cloud-config\n\nruncmd:\n - sudo yum update\n - sudo yum install -y nfs-utils\n - sudo yum install -y java-1.8.0-openjdk\n - sudo mkdir /MQHA\n - sudo mount -t nfs ',parameters('namePrefix'),'filesprm.privatelink.file.core.windows.net:/',parameters('namePrefix'),'filesprm/',parameters('mqsharename'),' /MQHA -o vers=4,minorversion=1,sec=sys \n - sudo echo \"',parameters('namePrefix'),'filesprm.privatelink.file.core.windows.net:/',parameters('namePrefix'),'filesprm/',parameters('mqsharename'),' /MQHA nfs rw,hard,noatime,nolock,vers=4,tcp,_netdev 0 0\" >> /etc/fstab \n - sudo mkdir -p /MQHA/logs\n - sudo mkdir -p /MQHA/qmgrs\n - sudo groupadd mqclient\n - sudo useradd app\n - sudo wget https://aka.ms/downloadazcopy-v10-linux -O /tmp/azcopy.tar.gz\n - sudo tar -xvf /tmp/azcopy.tar.gz -C /tmp\n - sudo mv /tmp/azcopy_linux* /tmp/azcopy')]",
+            "metadata": {
+                "description": "Bootstrap script for MQ VM"
+            }
         }
     },
     "variables": {
@@ -242,7 +288,10 @@
         "fileStorageAccountPrivateEndpointGroupName": "file",
         "devVmIpName": "[concat(variables('devVmName'), '-nic')]",
         "devVmNsgName": "[concat(variables('devVmName'), '-nsg')]",
-        "devVmName": "[concat(parameters('namePrefix'), '-dev-vm')]"
+        "devVmName": "[concat(parameters('namePrefix'), '-dev-vm')]",
+        "mqVmName": "[concat(parameters('namePrefix'),'-mq-vm')]",
+        "mqVmIpName": "[concat(variables('mqVmName'), '-nic')]",
+        "mqVmNsgName": "[concat(variables('mqVmName'), '-nsg')]"
     },
     "resources": [
         {
@@ -328,6 +377,7 @@
                 "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
             ]
         },
+        /* Below are the NAT gateway resources */
         {
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2022-07-01",
@@ -359,6 +409,7 @@
                 "[resourceId('Microsoft.Network/publicIPAddresses', variables('gwPublicIPName'))]"
             ]
         },
+        /* Below are the bastion service resources */
         {
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2022-07-01",
@@ -519,6 +570,7 @@
                 "[resourceId('Microsoft.Network/publicIPAddresses', variables('bastionIPName'))]"
             ]
         },
+        /* Below are the PostgreSQL server resources */
         {
             "type": "Microsoft.Network/privateDnsZones",
             "apiVersion": "2020-06-01",
@@ -616,6 +668,7 @@
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgreSQLName'))]"
             ]
         },
+        /* Below are the storage resources for MQ */
         {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2021-06-01",
@@ -797,6 +850,7 @@
                 "[resourceId('Microsoft.Storage/storageAccounts',variables('storageAccountName'))]"
             ]
         },
+        /* Below are the Dev VM resources */
         {
             "type": "Microsoft.Network/networkInterfaces",
             "apiVersion": "2022-07-01",
@@ -819,7 +873,8 @@
                 }
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('devVmNsgName'))]"
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('devVmNsgName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('devSubnetName'))]"
             ]
         },
         {
@@ -881,6 +936,96 @@
             ],
             "dependsOn": [
                 "[resourceId('Microsoft.Network/networkInterfaces', variables('devVmIpName'))]"
+            ]
+        },
+        /* Below are the MQ VM resources*/
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('mqVmIpName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('workerSubnetName'))]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic"
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('mqVmNsgName'))]"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('mqVmNsgName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('workerSubnetName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('mqVmNsgName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "securityRules": "[parameters('vmNsgSecurityRules')]"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2021-03-01",
+            "name": "[variables('mqVmName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('mqVmSize')]"
+                },
+                "storageProfile": {
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "[parameters('mqVmDiskType')]"
+                        }
+                    },
+                    "imageReference": {
+                        "publisher": "RedHat",
+                        "offer": "RHEL",
+                        "sku": "[parameters('mqVmOsVersion')]",
+                        "version": "latest"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('mqVmIpName'))]"
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[variables('mqVmName')]",
+                    "adminUsername": "[parameters('adminUserName')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "customData": "[base64(parameters('mqVmBootstrap'))]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false
+                    }
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true
+                    }
+                }
+            },
+            "zones": [
+                "[parameters('mqVmZone')]"
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces',variables('mqVmIpName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares',concat(variables('storageAccountName'),'/default/',parameters('mqsharename')))]",
+                "[resourceId('Microsoft.Network/privateEndpoints',parameters('privateStorageEndpointName'))]"
             ]
         }
     ]
