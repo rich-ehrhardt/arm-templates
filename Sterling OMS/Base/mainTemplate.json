@@ -155,6 +155,68 @@
             "metadata": {
                 "description": "name of the Azure Premium File Share to create MQ instance"
             }
+        },
+        "vmNsgSecurityRules": {
+            "type": "array",
+            "defaultValue": [
+                {
+                    "name": "SSH",
+                    "properties": {
+                        "priority": 300,
+                        "protocol": "TCP",
+                        "access": "Allow",
+                        "direction": "Inbound",
+                        "sourceAddressPrefix": "*",
+                        "sourcePortRange": "*",
+                        "destinationAddressPrefix": "*",
+                        "destinationPortRange": "22"
+                    }
+                }
+            ]
+        },
+        "devVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_B2ms",
+            "metadata": {
+                "description": "Size of Dev VM"
+            }
+        },
+        "devVmDiskType": {
+            "type": "string",
+            "defaultValue": "Premium_LRS",
+            "allowedValues": [
+                "Premium_LRS",
+                "Premium_ZRS",
+                "Standard_LRS",
+                "StandardSSD_LRS",
+                "StandardSSD_ZRS",
+                "UltraSSD_LRS"
+            ],
+            "metadata": {
+                "description": "OS Disk type for Dev VM"
+            }
+        },
+        "devVmBootstrap": {
+            "type": "string",
+            "defaultValue": "#cloud-config\n\nruncmd:\n - sudo apt-get update -y \n - sudo apt-get install -y ca-certificates curl gnupg lsb-release\n - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg\n - echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null\n - sudo apt-get update -y\n - sudo apt-get -y install docker-ce docker-ce-cli containerd.io\n - curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3\n - chmod 700 get_helm.sh\n - ./get_helm.sh\n - sudo usermod -aG docker $USER\n - mkdir /tmp/OCPInstall\n - [ wget, -nv, \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz\", -O, /tmp/OCPInstall/openshift-client-linux.tar.gz ]\n - tar xvf /tmp/OCPInstall/openshift-client-linux.tar.gz -C /tmp/OCPInstall\n - sudo cp /tmp/OCPInstall/oc /usr/bin",
+            "metadata": {
+                "description": "Bootstrap script for Dev VM"
+            }
+        },
+        "devVmZone": {
+            "type": "string",
+            "defaultValue": "1",
+            "metadata": {
+                "description": "Availability zone for the Dev VM"
+            }
+        },
+        "devVmOSVersion": {
+            "type": "string",
+            "defaultValue": "18.04-LTS",
+            "allowedValues": [
+                "18.04-LTS",
+                "20.04-LTS"
+            ]
         }
     },
     "variables": {
@@ -177,7 +239,10 @@
         "workspaceName": "[concat(parameters('namePrefix'), '-log-analytics-workspace')]",
         "storageAccountName": "[concat(parameters('namePrefix'), 'filesprm')]",
         "storageDNSZoneName": "[concat('privatelink.file.',parameters('storageSuffix'))]",
-        "fileStorageAccountPrivateEndpointGroupName": "file"
+        "fileStorageAccountPrivateEndpointGroupName": "file",
+        "devVmIpName": "[concat(variables('devVmName'), '-nic')]",
+        "devVmNsgName": "[concat(variables('devVmName'), '-nsg')]",
+        "devVmName": "[concat(parameters('namePrefix'), '-dev-vm')]"
     },
     "resources": [
         {
@@ -686,6 +751,22 @@
             "type": "Microsoft.Insights/diagnosticSettings",
             "apiVersion": "2021-05-01-preview",
             "condition": "[parameters('deployLogAnalytics')]",
+            "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+            "name": "[variables('storageAccountName')]",
+            "properties": {
+                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces',variables('workspaceName'))]",
+                "metrics": [
+                {
+                    "category": "Transaction",
+                    "enabled": true
+                }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/diagnosticSettings",
+            "apiVersion": "2021-05-01-preview",
+            "condition": "[parameters('deployLogAnalytics')]",
             "name": "[concat(variables('storageAccountName'),'-fileshares')]",
             "scope": "[format('Microsoft.Storage/storageAccounts/{0}/fileServices/{1}', variables('storageAccountName'), variables('storageAccountName'))]",
             "properties": {
@@ -714,6 +795,92 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts',variables('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('devVmIpName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('devSubnetName'))]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic"
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('devVmNsgName'))]"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('devVmNsgName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('devVmNsgName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "securityRules": "[parameters('vmNsgSecurityRules')]"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2021-03-01",
+            "name": "[variables('devVmName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('devVmSize')]"
+                },
+                "storageProfile": {
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "[parameters('devVmDiskType')]"
+                        }
+                    },
+                    "imageReference": {
+                        "publisher": "Canonical",
+                        "offer": "UbuntuServer",
+                        "sku": "[parameters('devVmOSVersion')]",
+                        "version": "latest"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('devVmIpName'))]"
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[variables('devVmName')]",
+                    "adminUsername": "[parameters('adminUserName')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "customData": "[base64(parameters('devVmBootstrap'))]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false
+                    }
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true
+                    }
+                }
+            },
+            "zones": [
+                "[parameters('devVmZone')]"
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('devVmIpName'))]"
             ]
         }
     ]
