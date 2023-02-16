@@ -814,7 +814,10 @@
                     "enabled": true
                 }
                 ]
-            }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts',variables('storageAccountName'))]"
+            ]
         },
         {
             "type": "Microsoft.Insights/diagnosticSettings",
