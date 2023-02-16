@@ -820,7 +820,7 @@
             "type": "Microsoft.Insights/diagnosticSettings",
             "apiVersion": "2021-05-01-preview",
             "condition": "[parameters('deployLogAnalytics')]",
-            "name": "[concat(variables('storageAccountName'),'-fileshares')]",
+            "name": "[variables('storageAccountName')]",
             "scope": "[format('Microsoft.Storage/storageAccounts/{0}/fileServices/{1}', variables('storageAccountName'), variables('storageAccountName'))]",
             "properties": {
                 "logAnalyticsDestinationType": "AzureDiagnostics",
@@ -874,7 +874,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Network/networkSecurityGroups', variables('devVmNsgName'))]",
-                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('devSubnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
             ]
         },
         {
@@ -962,7 +962,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Network/networkSecurityGroups', variables('mqVmNsgName'))]",
-                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('workerSubnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
             ]
         },
         {
@@ -1024,7 +1024,7 @@
             ],
             "dependsOn": [
                 "[resourceId('Microsoft.Network/networkInterfaces',variables('mqVmIpName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares',concat(variables('storageAccountName'),'/default/',parameters('mqsharename')))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares',variables('storageAccountName'),'default',parameters('mqsharename'))]",
                 "[resourceId('Microsoft.Network/privateEndpoints',parameters('privateStorageEndpointName'))]"
             ]
         }
