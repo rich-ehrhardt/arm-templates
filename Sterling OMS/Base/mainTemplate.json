@@ -263,6 +263,26 @@
             "metadata": {
                 "description": "Bootstrap script for MQ VM"
             }
+        },
+                "registrySku": {
+            "type": "string",
+            "defaultValue": "Premium",
+            "allowedValues": [
+                "Basic",
+                "Classic",
+                "Standard",
+                "Premium"
+            ],
+            "metadata": {
+                "description": "Container Registry SKU"
+            }
+        },
+        "acrLoginServer": {
+            "type": "string",
+            "defaultValue": "azurecr.io",
+            "metadata": {
+                "description": "Azure Container Registry Suffix"
+            }
         }
     },
     "variables": {
@@ -291,7 +311,8 @@
         "devVmName": "[concat(parameters('namePrefix'), '-dev-vm')]",
         "mqVmName": "[concat(parameters('namePrefix'),'-mq-vm')]",
         "mqVmIpName": "[concat(variables('mqVmName'), '-nic')]",
-        "mqVmNsgName": "[concat(variables('mqVmName'), '-nsg')]"
+        "mqVmNsgName": "[concat(variables('mqVmName'), '-nsg')]",
+        "registryName": "[concat(parameters('namePrefix'), 'registry')]"
     },
     "resources": [
         {
@@ -1029,6 +1050,116 @@
                 "[resourceId('Microsoft.Network/networkInterfaces',variables('mqVmIpName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares',variables('storageAccountName'),'default',parameters('mqsharename'))]",
                 "[resourceId('Microsoft.Network/privateEndpoints',parameters('privateStorageEndpointName'))]"
+            ]
+        },
+        /* Below are container registry resources */
+                {
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2021-09-01",
+            "name": "[variables('registryName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('registrySku')]"
+            },
+            "properties": {
+                "publicNetworkAccess": "Disabled",
+                "zoneRedundancy": "Disabled",
+                "adminUserEnabled": true
+            }
+        },
+        {
+            "type": "Microsoft.Network/privateDnsZones",
+            "apiVersion": "2020-06-01",
+            "name": "[concat('privatelink.', parameters('acrLoginServer'))]",
+            "location": "global",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+            "apiVersion": "2020-06-01",
+            "name": "[concat('privatelink.', parameters('acrLoginServer'), '/', variables('vnetName'), '-link')]",
+            "location": "global",
+            "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', concat('privatelink.', parameters('acrLoginServer')))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints",
+            "apiVersion": "2021-03-01",
+            "name": "oms-pe-acr",
+            "location": "[parameters('location')]",
+            "properties": {
+                "subnet": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('endpointSubnetName'))]"
+                },
+                "privateLinkServiceConnections": [
+                    {
+                        "properties": {
+                            "privateLinkServiceId": "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
+                            "groupIds": [
+                                "registry"
+                            ]
+                        },
+                        "name": "oms-pe-acr"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+            "apiVersion": "2020-06-01",
+            "name": "[concat('oms-pe-acr', '/dnsgroupname')]",
+            "properties": {
+                "privateDnsZoneConfigs": [
+                    {
+                        "name": "registry",
+                        "properties": {
+                            "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones',concat('privatelink.', parameters('acrLoginServer')))]"
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', 'oms-pe-acr')]"
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/diagnosticSettings",
+            "apiVersion": "2021-05-01-preview",
+            "condition": "[parameters('deployLogAnalytics')]",
+            "name": "[variables('registryName')]",
+            "scope": "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
+            "properties": {
+                "logAnalyticsDestinationType": "AzureDiagnostics",
+                "logs": [
+                    {
+                        "category": "ContainerRegistryRepositoryEvents",
+                        "enabled": true
+                    },
+                    {
+                        "category": "ContainerRegistryLoginEvents",
+                        "enabled": true
+                    }
+                ],
+                "metrics": [
+                    {
+                        "category": "AllMetrics",
+                        "enabled": true
+                    }
+                ],
+                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces',variables('workspaceName'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]"
             ]
         }
     ]
