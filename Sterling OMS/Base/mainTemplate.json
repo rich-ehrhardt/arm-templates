@@ -292,7 +292,7 @@
         "endpointSubnetName": "[concat(parameters('namePrefix'), '-endpoint-subnet')]",
         "dataSubnetName": "[concat(parameters('namePrefix'), '-data-subnet')]",
         "devSubnetName": "[concat(parameters('namePrefix'),'-dev-subnet')]",
-        "natSubnetName": "[concat(parameters('namePrefix'), '-nat-subnet')]",
+        "mgmtSubnetName": "[concat(parameters('namePrefix'), '-mgmt-subnet')]",
         "gwPublicIPName": "[concat(parameters('namePrefix'), '-gw-public-ip')]",
         "natGwName": "[concat(parameters('namePrefix'), '-nat-gw')]",
         "bastionSubnetName": "AzureBastionSubnet",
@@ -331,13 +331,19 @@
                         "name": "[variables('controlSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('controlSubnetCIDR')]",
-                            "privateLinkServiceNetworkPolicies": "Disabled"
+                            "privateLinkServiceNetworkPolicies": "Disabled",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
+                            }
                         }
                     },
                     {
                         "name": "[variables('workerSubnetName')]",
                         "properties": {
-                            "addressPrefix": "[parameters('workerSubnetCIDR')]"
+                            "addressPrefix": "[parameters('workerSubnetCIDR')]",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
+                            }
                         }
                     },
                     {
@@ -370,11 +376,14 @@
                     {
                         "name": "[variables('devSubnetName')]",
                         "properties": {
-                            "addressPrefix": "[parameters('devSubnetCIDR')]"
+                            "addressPrefix": "[parameters('devSubnetCIDR')]",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]"
+                            }
                         }
                     },
                     {
-                        "name": "[variables('natSubnetName')]",
+                        "name": "[variables('mgmtSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('natSubnetCIDR')]",
                             "natGateway": {
@@ -1111,7 +1120,8 @@
                 ]
             },
             "dependsOn": [
-                "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]"
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]"
             ]
         },
         {
