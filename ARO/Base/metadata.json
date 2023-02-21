@@ -1,0 +1,9 @@
+{
+    "$schema": "https://aka.ms/azure-quickstart-templates-metadata-schema#",
+    "type": "QuickStart",
+    "itemDisplayName": "Deploys a quickstart Azure Red Hat OpenShift (ARO) cluster",
+    "description": "This template deploys Azure Redhat Openshift",
+    "summary": "This template deploys Azure Redhat Openshift",
+    "githubUsername": "rich-ehrhardt",
+    "dateUpdated": "2022-02-21"
+}
