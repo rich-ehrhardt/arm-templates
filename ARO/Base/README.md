@@ -29,7 +29,7 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     export NAME_PREFIX="<name_prefix>"
     export RG_NAME="<resource_group_name>"
     export LOCATION="<resource_group_location>"
-    export PULL_SECRET=(cat <pull_secret_file_name>)
+    export PULL_SECRET=$(cat <pull_secret_file_name>)
     ```
     where 
     - `<name_prefix>` is the identifier which will prefix created resources. Needs to start with a lower case letter and be between 3 and 10 characters in length. 
@@ -56,15 +56,15 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     2. The following parameters for the build can be obtained from the output of this creation.
         ```shell
         export CLIENT_ID=$(cat ./sp-details.json | jq -r '.appId')
-        export CLIENT_SECRET=(cat ./sp-details.json | jq -r '.password')
-        export CLIENT_OBJECT_ID=(az ad sp show --id $CLIENT_ID --query "id" -o tsv)
+        export CLIENT_SECRET=$(cat ./sp-details.json | jq -r '.password')
+        export CLIENT_OBJECT_ID=$(az ad sp show --id $CLIENT_ID --query "id" -o tsv)
         ```
 
 4. Obtain the Azure Red Hat Openshift resource provider object id
     This is required to give the resource provider access to change the virtual network.
     To obtain the object id, run the following:
     ```shell
-    export RP_OBJECT_ID=(az ad sp list --display-name "Azure Red Hat OpenShift RP" --query "[0].id" -o tsv)
+    export RP_OBJECT_ID=$(az ad sp list --display-name "Azure Red Hat OpenShift RP" --query "[0].id" -o tsv)
     ```
 
 5. (Optional) Obtain a Red Hat OpenShift pull secret
@@ -84,7 +84,7 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     ```shell
     az deployment group create \
     --name aro_deployment \
-    --resource_group $RG_NAME \
+    --resource-group $RG_NAME \
     --template-file ./mainTemplate.json \
     --parameters namePrefix=$NAME_PREFIX \
     --parameters spClientId=$CLIENT_ID \
