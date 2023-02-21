@@ -55,7 +55,7 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
 
     2. The following parameters for the build can be obtained from the output of this creation.
         ```shell
-        export CLIENT_ID=(cat ./sp-details.json | jq -r '.appId')
+        export CLIENT_ID=$(cat ./sp-details.json | jq -r '.appId')
         export CLIENT_SECRET=(cat ./sp-details.json | jq -r '.password')
         export CLIENT_OBJECT_ID=(az ad sp show --id $CLIENT_ID --query "id" -o tsv)
         ```
