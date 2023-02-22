@@ -38,8 +38,6 @@
                 "description": "CIDR for the worker subnet"
             }
         },
-
-        /* Below is for ARO */
         "spClientId" : {
             "type": "string",
             "metadata": {
@@ -72,7 +70,7 @@
         },
         "domain": {
             "type": "string",
-            "defaultValue": "[substring(concat(toLower(first(parameters('namePrefix'))),uniqueString(resourceGroup().id)),1,8)]",
+            "defaultValue": "[concat(toLower(first(parameters('namePrefix'))),substring(uniqueString(resourceGroup().id),1,7))]",
             "metadata": {
                 "description": "Domain name prefix for the ARO cluster. Default is generated from resource group id."
             }
@@ -164,10 +162,10 @@
         "vnetName": "[concat(parameters('namePrefix'), '-vnet')]",
         "controlSubnetName": "[concat(parameters('namePrefix'), '-control-subnet')]",
         "workerSubnetName": "[concat(parameters('namePrefix'), '-worker-subnet')]",
-
         "aroRG": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',variables('clusterName'))]",
         "clusterName": "[concat(parameters('namePrefix'), '-aro')]",
-        "contribRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+        "contribRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+        "userAccessAdminRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9')]"
     },
     "resources": [
         {
@@ -208,7 +206,26 @@
                 ]
             }
         },
-        /* Below are the ARO resources */
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(concat(resourceGroup().id, 'contributor'))]",
+            "properties": {
+                "roleDefinitionId": "[variables('contribRole')]",
+                "principalId": "[parameters('spObjectId')]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(concat(resourceGroup().id, 'userAccessAdministrator'))]",
+            "properties": {
+                "roleDefinitionId": "[variables('userAccessAdminRole')]",
+                "principalId": "[parameters('spObjectId')]",
+                "principalType": "ServicePrincipal"
+            }
+        },
         {
             "type": "Microsoft.Network/virtualNetworks/providers/roleAssignments",
             "apiVersion": "2018-09-01-preview",

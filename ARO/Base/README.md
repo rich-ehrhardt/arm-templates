@@ -23,7 +23,12 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     cd ARO/Base
     ```
 
-1. Export the key parameters 
+2. (Optional) Obtain a Red Hat OpenShift pull secret
+    This allows the installation of operators from the Red Hat Marketplace. Refer [here](https://console.redhat.com/openshift/install/pull-secret) to obtain a pull secret. Save this pull secret to a file on your local machine.
+
+    Note that the pull secret can also be added after the cluster has been created by following [these instructions](https://learn.microsoft.com/en-us/azure/openshift/howto-add-update-pull-secret)
+
+3. Export the key parameters 
     This step allows the parameters to be defined once as you follow steps.
     ```shell
     export NAME_PREFIX="<name_prefix>"
@@ -35,7 +40,7 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     - `<name_prefix>` is the identifier which will prefix created resources. Needs to start with a lower case letter and be between 3 and 10 characters in length. 
     - `<resource_group_name>` is the name to give to the resource group. This should always start with the a lower case letter.
     - `<resource_group_location>` is the Azure location to for the resource group.
-    - `<pull_secret_file_name>` is the full path and filename to a file containing the Red Hat OpenShift pull secret
+    - `<pull_secret_file_name>` is the full path and filename to a file containing the Red Hat OpenShift pull secret you saved in step 2.
 
 
         To obtain a list of available locations for your subscription, run the following.
@@ -43,7 +48,7 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
         az account list-locations -o table
         ```
 
-2. Create a service principal for the cluster
+4. Create a service principal for the cluster
     This is used by the cluster to provision resources (such as scaling the worker nodes).  Note that you can only have one cluster registered to a service principal, so it is recommended to create a new service principal for each cluster.
     1. Use the following commands to create a service principal.
         ```shell
@@ -60,24 +65,18 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
         export CLIENT_OBJECT_ID=$(az ad sp show --id $CLIENT_ID --query "id" -o tsv)
         ```
 
-4. Obtain the Azure Red Hat Openshift resource provider object id
+5. Obtain the Azure Red Hat Openshift resource provider object id
     This is required to give the resource provider access to change the virtual network.
     To obtain the object id, run the following:
     ```shell
     export RP_OBJECT_ID=$(az ad sp list --display-name "Azure Red Hat OpenShift RP" --query "[0].id" -o tsv)
     ```
 
-5. (Optional) Obtain a Red Hat OpenShift pull secret
-    This allows the installation of operators from the Red Hat Marketplace. Refer [here](https://console.redhat.com/openshift/install/pull-secret) to obtain a pull secret.
-
-    Note that the pull secret can also be added after the cluster has been created by following [these instructions](https://learn.microsoft.com/en-us/azure/openshift/howto-add-update-pull-secret)
-
 6. Create a resource group
     This resource group will be used for the deployment and will contain the virtual network together with the ARO resource. The ARO resource will create a separate resource group with the ARO components.
     ```shell
     az group create --name $RG_NAME --location $LOCATION
     ```
-
 
 7. Create the deployment
     This will create the deployment in the resource group you just created.
@@ -92,4 +91,42 @@ This guide uses the Azure CLI tools. It is also possible to use the same templat
     --parameters spObjectId=$CLIENT_OBJECT_ID \
     --parameters rpObjectId=$RP_OBJECT_ID \
     --parameters pullSecret=$PULL_SECRET
+    ```
+
+## Clean up Steps
+
+When you are finished with the environment. Perform the following steps to remove it. 
+
+**Note** This will delete all data and settings. Only do this when the environment is no longer required.
+
+1. Delete the ARO Cluster
+    1. Find the cluster details
+        ```shell
+        az aro list -o table
+        ```
+    2. Delete the cluster
+        ```shell
+        az aro delete -n <cluster_name> -g <resource_group>
+        ```
+        where
+        - `<cluster_name>` is the name of the cluster shown in the table
+        - `<resource_group>` is the resource group name shown in the table
+
+2. Delete the base resource group
+    ```shell
+    az group delete --name <resource_group>
+    ```
+    where
+    - `<resource_group>` is the resource group name shown in the table and originally specified during the build process.
+
+3. Delete the service principal
+    ```shell
+    az ad sp delete --id <appId>
+    ```
+    where
+    - `<appId>` is the service principal appId or client id that was created in the build process. If the file still exists, it is available in the `sp-details.json` file from the build process.
+
+4. If not already, delete the `sp-details.json` file.
+    ```shell
+    rm ./sp-details.json
     ```
