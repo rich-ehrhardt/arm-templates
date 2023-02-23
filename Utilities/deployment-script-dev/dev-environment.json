@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "namePrefix": {
+        "type": "string",
+        "metadata": {
+          "description": "Prefix for all created resource names."
+        }
+      },
+      "containerImage": {
+        "type": "string",
+        "defaultValue": "mcr.microsoft.com/azure-cli:2.9.1",
+        "metadata": {
+          "description": "The container image."
+        }
+      },
+      "mountPath": {
+        "type": "string",
+        "defaultValue": "/mnt/azscripts/azscriptinput",
+        "metadata": {
+          "description": "The storage mount point in the container."
+        }
+      }
+    },
+    "variables": {
+      "storageAccountName": "[tolower(concat(parameters('namePrefix'), 'store'))]",
+      "fileShareName": "[concat(parameters('namePrefix'), 'share')]",
+      "containerGroupName": "[concat(parameters('namePrefix'), '-cg')]",
+      "containerName": "[concat(parameters('namePrefix'), '-container')]"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Storage/storageAccounts",
+        "apiVersion": "2019-06-01",
+        "name": "[variables('storageAccountName')]",
+        "location": "[resourceGroup().location]",
+        "sku": {
+          "name": "Standard_LRS",
+          "tier": "Standard"
+        },
+        "kind": "StorageV2",
+        "properties": {
+          "accessTier": "Hot"
+        }
+      },
+      {
+        "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+        "apiVersion": "2019-06-01",
+        "name": "[concat(variables('storageAccountName'), '/default/', variables('fileShareName'))]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        ]
+      },
+      {
+        "type": "Microsoft.ContainerInstance/containerGroups",
+        "apiVersion": "2019-12-01",
+        "name": "[variables('containerGroupName')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        ],
+        "properties": {
+          "containers": [
+            {
+              "name": "[variables('containerName')]",
+              "properties": {
+                "image": "[parameters('containerImage')]",
+                "resources": {
+                  "requests": {
+                    "cpu": 1,
+                    "memoryInGb": 1.5
+                  }
+                },
+                "ports": [
+                  {
+                    "protocol": "TCP",
+                    "port": 80
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "name": "filesharevolume",
+                    "mountPath": "[parameters('mountPath')]"
+                  }
+                ],
+                "command": [
+                  "/bin/bash",
+                  "-c",
+                  "echo hello; sleep 1800"
+                ]
+              }
+            }
+          ],
+          "osType": "Linux",
+          "volumes": [
+            {
+              "name": "filesharevolume",
+              "azureFile": {
+                "readOnly": false,
+                "shareName": "[variables('fileShareName')]",
+                "storageAccountName": "[variables('storageAccountName')]",
+                "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value]"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
