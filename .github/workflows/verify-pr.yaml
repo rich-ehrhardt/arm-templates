@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         directories:
-          - "./Sterling\ /OMS/Base/"
+          - "./Sterling\ OMS/Base/"
           - "./ARO/Base/"
           - "./ARO/BYO-Network/"
           - "./Networking/"
