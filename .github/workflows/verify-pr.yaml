@@ -14,15 +14,13 @@ jobs:
           - "./Marketplace/SterlingOMS"
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
       - name: Linting ${{ matrix.directories }}
         id: linting
-        uses: venura9/arm-ttk@master
+        uses: microsoft/action-armttk/.github/workflows/arm-ttk@v1
         with: 
-          path: ${{ matrix.directories }}
-
-      - name: Test Results for ${{ matrix.directories }}
-        shell: bash
-        continue-on-error: true
-        run: |
-          echo "${{ toJSON(fromJSON(steps.linting.outputs.results)) }}"
+          workdir: ${{ matrix.directories }}
+          github_token: ${{ secrets.TOKEN }}
           
