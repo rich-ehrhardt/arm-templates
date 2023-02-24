@@ -12,9 +12,6 @@ jobs:
       matrix:
         directories:
           - "./Sterling\ OMS/Base/"
-          - "./ARO/Base/"
-          - "./ARO/BYO-Network/"
-          - "./Networking/"
 
     steps:
       - name: Checkout
