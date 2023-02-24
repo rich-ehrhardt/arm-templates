@@ -19,7 +19,7 @@ jobs:
 
       - name: Linting ${{ matrix.directories }}
         id: linting
-        uses: microsoft/action-armttk/.github/workflows/arm-ttk@v1
+        uses: microsoft/action-armttk@v1
         with: 
           workdir: ${{ matrix.directories }}
           github_token: ${{ secrets.TOKEN }}
