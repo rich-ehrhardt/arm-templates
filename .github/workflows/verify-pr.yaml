@@ -8,9 +8,10 @@ jobs:
   Linting:
     runs-on: ubuntu-latest
 
-    matrix:
-      directories:
-        - "./Marketplace/SterlingOMS"
+    strategy:
+      matrix:
+        directories:
+          - "./Marketplace/SterlingOMS"
 
     steps:
       - name: Linting ${{ matrix.directories }}
