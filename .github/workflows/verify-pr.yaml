@@ -11,7 +11,10 @@ jobs:
     strategy:
       matrix:
         directories:
-          - "./Marketplace/SterlingOMS"
+          - "./Sterling\ /OMS/Base/"
+          - "./ARO/Base/"
+          - "./ARO/BYO-Network/"
+          - "./Networking/"
 
     steps:
       - name: Checkout
