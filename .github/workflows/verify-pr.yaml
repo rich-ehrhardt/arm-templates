@@ -10,7 +10,9 @@ jobs:
 
     strategy:
       matrix:
-        directories: []
+        directories:
+          - "./Networking/base-vnet.json"
+          - "./Networking/bastion.json"
 
     steps:
       - name: Checkout
