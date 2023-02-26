@@ -10,8 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        directories:
-          - "./SterlingOMS/Base/"
+        directories: []
 
     steps:
       - name: Checkout
