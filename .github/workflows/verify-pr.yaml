@@ -13,6 +13,8 @@ jobs:
         directories:
           - "./Networking/base-vnet.json"
           - "./Networking/bastion.json"
+          - "./Compute/ubuntu-vm-pwd.json"
+          - "./Networking/subnet.json"
 
     steps:
       - name: Checkout
