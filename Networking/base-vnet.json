@@ -83,5 +83,31 @@
                 ]
             }
         }
-    ]
+    ],
+    "outputs": {
+        "vnetName": {
+            "type": "string",
+            "value": "[variables('vnetName')]"
+        },
+        "vnetCIDR": {
+            "type": "string",
+            "value": "[parameters('vnetCIDR')]"
+        },
+        "controlSubnetName": {
+            "type": "string",
+            "value": "[variables('controlSubnetName')]"
+        },
+        "controlSubnetCIDR": {
+            "type": "string",
+            "value": "[parameters('controlSubnetCIDR')]"
+        },
+        "workerSubnetName": {
+            "type": "string",
+            "value": "[variables('workerSubnetName')]"
+        },
+        "workerSubnetCIDR": {
+            "type": "string",
+            "value": "[parameters('workerSubnetCIDR')]"
+        }
+    }
 }
