@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "subnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for subnet"
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "Virtual network for subnet"
+            }
+        },
+        "subnetCIDR": {
+            "type": "string",
+            "metadata": {
+                "description": "CIDR for the subnet"
+            }
+        }
+    },
+    "variables": {
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2021-05-01",
+            "name": "[concat(parameters('vnetName'),'/',variables('subnetName'))]",
+            "properties": {
+                "addressPrefix": "[parameters('subnetCIDR')]"
+            }
+        }
+    ]
+}
