@@ -37,12 +37,17 @@
             "metadata": {
                 "description": "CIDR for the worker subnet"
             }
+        },
+        "natGwName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'),'-ngw')]"
         }
     },
     "variables": {
         "vnetName": "[concat(parameters('namePrefix'), '-vnet')]",
         "controlSubnetName": "[concat(parameters('namePrefix'), '-control-subnet')]",
-        "workerSubnetName": "[concat(parameters('namePrefix'), '-worker-subnet')]"
+        "workerSubnetName": "[concat(parameters('namePrefix'), '-worker-subnet')]",
+        "gwPublicIPName": "[concat(parameters('namePrefix'),'-pip')]"
     },
     "resources": [
         {
@@ -50,6 +55,9 @@
             "apiVersion": "2022-07-01",
             "name": "[variables('vnetName')]",
             "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/natGateways', parameters('natGwName'))]"
+            ],
             "properties": {
                 "addressSpace": {
                     "addressPrefixes": [
@@ -62,6 +70,9 @@
                         "properties": {
                             "addressPrefix": "[parameters('controlSubnetCIDR')]",
                             "privateLinkServiceNetworkPolicies": "Disabled",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', parameters('natGwName'))]"
+                            },
                             "serviceEndpoints": [
                                 {
                                     "service": "Microsoft.ContainerRegistry"
@@ -73,6 +84,9 @@
                         "name": "[variables('workerSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('workerSubnetCIDR')]",
+                            "natGateway": {
+                                "id": "[resourceId('Microsoft.Network/natGateways', parameters('natGwName'))]"
+                            },
                             "serviceEndpoints": [
                                 {
                                     "service": "Microsoft.ContainerRegistry"
@@ -82,6 +96,37 @@
                     }
                 ]
             }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('gwPublicIPName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "sku": {
+                "name": "Standard"
+            }
+        },
+        {
+            "type": "Microsoft.Network/natGateways",
+            "apiVersion": "2022-07-01",
+            "name": "[parameters('natGwName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIpAddresses": [
+                    {
+                        "id": "[resourceId('Microsoft.Network/publicIpAddresses/', variables('gwPublicIPName'))]"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('gwPublicIPName'))]"
+            ]
         }
     ],
     "outputs": {
