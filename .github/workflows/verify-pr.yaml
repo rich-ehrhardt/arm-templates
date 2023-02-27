@@ -14,6 +14,7 @@ jobs:
           - "./Networking/base-vnet.json"
           - "./Networking/bastion.json"
           - "./Compute/ubuntu-vm-pwd.json"
+          - "./Compute/dev-vm.json"
           - "./Networking/subnet.json"
 
     steps:
