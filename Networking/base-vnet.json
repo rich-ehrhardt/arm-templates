@@ -70,9 +70,6 @@
                         "properties": {
                             "addressPrefix": "[parameters('controlSubnetCIDR')]",
                             "privateLinkServiceNetworkPolicies": "Disabled",
-                            "natGateway": {
-                                "id": "[resourceId('Microsoft.Network/natGateways', parameters('natGwName'))]"
-                            },
                             "serviceEndpoints": [
                                 {
                                     "service": "Microsoft.ContainerRegistry"
@@ -84,9 +81,6 @@
                         "name": "[variables('workerSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('workerSubnetCIDR')]",
-                            "natGateway": {
-                                "id": "[resourceId('Microsoft.Network/natGateways', parameters('natGwName'))]"
-                            },
                             "serviceEndpoints": [
                                 {
                                     "service": "Microsoft.ContainerRegistry"
