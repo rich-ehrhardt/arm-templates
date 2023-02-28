@@ -1,0 +1,346 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "namePrefix": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 10,
+            "metadata": {
+                "description": "Prefix for resource names"
+            }
+        },
+        "deployVNet": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create a virtual network"
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'),'-vnet')]",
+            "metadata": {
+                "description": "Name of the virtual network"
+            }
+        },
+        "vnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/20",
+            "metadata": {
+                "description": "CIDR for Virtual Network"
+            }
+        },
+        "controlSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/24",
+            "metadata": {
+                "description": "CIDR for the control subnet"
+            }
+        },
+        "workerSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.1.0/24",
+            "metadata": {
+                "description": "CIDR for the worker subnet"
+            }
+        },
+        "ngwName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'),'-ngw')]",
+            "metadata": {
+                "description": "Name of the NAT Gateway"
+            }
+        },
+        "deployBastion": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create a bastion service"
+            }
+        },
+        "bastionSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.6.0/24",
+            "metadata": {
+                "description": "CIDR for the bastion subnet"
+            }
+        },
+        "deployDevVM": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create dev VM"
+            }
+        },
+        "devSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.4.0/24",
+            "metadata": {
+                "description": "CIDR for the development subnet"
+            }
+        },
+        "devVMBootstrap": {
+            "type": "string",
+            "defaultValue": "#cloud-config\n\nruncmd:\n - sudo apt-get update -y \n - sudo apt-get install -y ca-certificates curl gnupg lsb-release\n - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg\n - echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null\n - sudo apt-get update -y\n - sudo apt-get -y install docker-ce docker-ce-cli containerd.io\n - curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3\n - chmod 700 get_helm.sh\n - ./get_helm.sh\n - sudo usermod -aG docker $USER\n - mkdir /tmp/OCPInstall\n - [ wget, -nv, \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz\", -O, /tmp/OCPInstall/openshift-client-linux.tar.gz ]\n - tar xvf /tmp/OCPInstall/openshift-client-linux.tar.gz -C /tmp/OCPInstall\n - sudo cp /tmp/OCPInstall/oc /usr/bin",
+            "metadata": {
+                "description": "Bootstrap script for Dev VM"
+            }
+        },
+        "adminUserName": {
+            "type": "string",
+            "defaultValue": "azureuser",
+            "metadata": {
+                "description": "Admin user for created VMs"
+            }
+        },
+        "adminPassword": {
+            "type": "secureString",
+            "metadata": {
+                "description": "Default admin password for VMs"
+            }
+        },
+        "deployARO": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determien whether to create the ARO cluster"
+            }
+        },
+        "spClientId" : {
+            "type": "string",
+            "metadata": {
+                "description" : "The app ID of the Service Principal (client id)"
+            }
+        },
+        "spClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The service principal secret key."
+            }
+        },
+        "spObjectId": {
+            "type": "String",
+            "metadata": {
+                "description": "The ObjectID of the Service Principal"
+            }
+        },
+        "rpObjectId": {
+            "type": "string",
+            "metadata": {
+                "description": "Red Hat OpenShift Resource Provider Object Id - obtain using (az ad sp list --display-name \"Azure Red Hat OpenShift RP\" --query \"[0].id\" -o tsv)"
+            }
+        },
+        "pullSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Red Hat OpenShift Pull Secret"
+            }
+        },
+        "workerSize": {
+            "type": "string",
+            "defaultValue": "Standard_D4s_v3",
+            "metadata": {
+                "description": "VM size for worker nodes"
+            }
+        },
+        "workerCount": {
+            "type": "int",
+            "defaultValue": 3,
+            "minValue": 3,
+            "maxValue": 60,
+            "metadata": {
+                "description": "Number of compute nodes to deploy"
+            }
+        },
+        "apiVisibility": {
+            "type": "string",
+            "defaultValue": "Public",
+            "allowedValues": [
+                "Public",
+                "Private"
+            ],
+            "metadata": {
+                "description": "Visibility of cluster API - public or private"
+            }
+        },
+        "ingressVisibility": {
+            "type": "string",
+            "defaultValue": "Public",
+            "allowedValues": [
+                "Public",
+                "Private"
+            ],
+            "metadata": {
+                "description": "Visibility of cluster ingress portal - public or private"
+            }
+        }
+    },
+    "variables": {
+        "baseUrl": "https://raw.githubusercontent.com/rich-ehrhardt/arm-templates/initial-version/",
+        "devVMPrefix": "[concat(parameters('namePrefix'),'-dev')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployVNet')]",
+            "name": "virtual-network",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'Networking/base-vnet.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "namePrefix": {
+                        "value": "[parameters('namePrefix')]"
+                    },
+                    "vnetCIDR": {
+                        "value": "[parameters('vnetCIDR')]"
+                    },
+                    "controlSubnetCIDR": {
+                        "value": "[parameters('controlSubnetCIDR')]"
+                    },
+                    "workerSubnetCIDR": {
+                        "value": "[parameters('workerSubnetCIDR')]"
+                    },
+                    "natGwName": {
+                        "value": "[parameters('ngwName')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployBastion')]",
+            "name": "bastion",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'), 'Networking/bastion.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "namePrefix": {
+                        "value": "[parameters('namePrefix')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "bastionSubnetCIDR": {
+                        "value": "[parameters('bastionSubnetCIDR')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployDevVM')]",
+            "name": "dev-vm",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'), 'Compute/dev-vm.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "namePrefix": {
+                        "value": "[variables('devVMPrefix')]"
+                    },
+                    "createSubnet": {
+                        "value": true
+                    },
+                    "subnetCIDR": {
+                        "value": "[parameters('devSubnetCIDR')]"
+                    },
+                    "vnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['vnetName'].value]"
+                    },
+                    "adminUserName": {
+                        "value": "[parameters('adminUserName')]"
+                    },
+                    "adminPassword": {
+                        "value": "[parameters('adminPassword')]"
+                    },
+                    "vmBootstrap": {
+                        "value": "[parameters('devVMBootstrap')]"
+                    },
+                    "natGwName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['ngwName'].value]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployARO')]",
+            "name": "aro",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'), 'ARO/Base/mainTemplate.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "namePrefix": {
+                        "value": "[variables('devVMPrefix')]"
+                    },
+                    "createVnet": {
+                        "value": false
+                    },
+                    "vnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['vnetName'].value]"
+                    },
+                    "controlSubnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['controlSubnetName'].value]"
+                    },
+                    "workerSubnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['workerSubnetName'].value]"
+                    },
+                    "spClientId": {
+                        "value": "[parameters('spClientId')]"
+                    },
+                    "spClientSecret": {
+                        "value": "[parameters('spClientSecret')]"
+                    },
+                    "spObjectId": {
+                        // to do: get this through deploy script in linked template
+                        "value": "[parameters('spObjectId')]"
+                    },
+                    "rpObjectId": {
+                        // to do: get this through deploy script in linked template
+                        "value": "[parameters('rpObjectId')]"
+                    },
+                    "pullSecret": {
+                        "value": "[parameters('pullSecret')]"
+                    },
+                    "workerSize": {
+                        "value": "[parameters('workerSize')]"
+                    },
+                    "workerCount": {
+                        "value": "[parameters('workerCount')]"
+                    },
+                    "apiVisibility": {
+                        "value": "[parameters('apiVisibility')]"
+                    },
+                    "ingressVisibility": {
+                        "value": "[parameters('ingressVisibility')]"
+                    }
+                }
+            }
+        }
+    ]
+}
