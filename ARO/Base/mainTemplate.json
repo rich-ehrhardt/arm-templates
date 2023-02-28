@@ -24,6 +24,13 @@
                 "description": "CIDR for Virtual Network"
             }
         },
+        "createVnet": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create a new Virtual Network or use existing"
+            }
+        },
         "controlSubnetCIDR": {
             "type": "string",
             "defaultValue": "10.0.0.0/24",
@@ -171,6 +178,7 @@
         {
             "type": "Microsoft.Network/virtualNetworks",
             "apiVersion": "2022-09-01",
+            "condition": "[parameters('createVnet')]",
             "name": "[variables('vnetName')]",
             "location": "[parameters('location')]",
             "properties": {
