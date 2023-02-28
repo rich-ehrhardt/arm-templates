@@ -24,6 +24,13 @@
                 "description": "CIDR for Virtual Network"
             }
         },
+        "vnetName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), '-vnet')]",
+            "metadata": {
+                "description": "Name of the virtual network"
+            }
+        },
         "createVnet": {
             "type": "bool",
             "defaultValue": true,
@@ -38,11 +45,25 @@
                 "description": "CIDR for the control subnet"
             }
         },
+        "controlSubnetName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), '-control-subnet')]",
+            "metadata": {
+                "description": "Name of the control / master subnet"
+            }
+        },
         "workerSubnetCIDR": {
             "type": "string",
             "defaultValue": "10.0.1.0/24",
             "metadata": {
                 "description": "CIDR for the worker subnet"
+            }
+        },
+        "workerSubnetName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), '-worker-subnet')]",
+            "metadata": {
+                "description": "Name of the worker subnet"
             }
         },
         "spClientId" : {
@@ -166,9 +187,6 @@
         
     },
     "variables": {
-        "vnetName": "[concat(parameters('namePrefix'), '-vnet')]",
-        "controlSubnetName": "[concat(parameters('namePrefix'), '-control-subnet')]",
-        "workerSubnetName": "[concat(parameters('namePrefix'), '-worker-subnet')]",
         "aroRG": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',variables('clusterName'))]",
         "clusterName": "[concat(parameters('namePrefix'), '-aro')]",
         "contribRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
@@ -179,7 +197,7 @@
             "type": "Microsoft.Network/virtualNetworks",
             "apiVersion": "2022-09-01",
             "condition": "[parameters('createVnet')]",
-            "name": "[variables('vnetName')]",
+            "name": "[parameters('vnetName')]",
             "location": "[parameters('location')]",
             "properties": {
                 "addressSpace": {
@@ -189,7 +207,7 @@
                 },
                 "subnets": [
                     {
-                        "name": "[variables('controlSubnetName')]",
+                        "name": "[parameters('controlSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('controlSubnetCIDR')]",
                             "privateLinkServiceNetworkPolicies": "Disabled",
@@ -201,7 +219,7 @@
                         }
                     },
                     {
-                        "name": "[variables('workerSubnetName')]",
+                        "name": "[parameters('workerSubnetName')]",
                         "properties": {
                             "addressPrefix": "[parameters('workerSubnetCIDR')]",
                             "serviceEndpoints": [
@@ -237,25 +255,25 @@
         {
             "type": "Microsoft.Network/virtualNetworks/providers/roleAssignments",
             "apiVersion": "2018-09-01-preview",
-            "name": "[concat(variables('vnetName'), '/Microsoft.Authorization/', guid(resourceGroup().id, deployment().name, parameters('rpObjectId')))]",
+            "name": "[concat(parameters('vnetName'), '/Microsoft.Authorization/', guid(resourceGroup().id, deployment().name, parameters('rpObjectId')))]",
             "properties": {
                 "roleDefinitionId": "[variables('contribRole')]",
                 "principalId": "[parameters('rpObjectId')]"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
             ]
         },
         {
             "type": "Microsoft.Network/virtualNetworks/providers/roleAssignments",
             "apiVersion": "2018-09-01-preview",
-            "name": "[concat(variables('vnetName'), '/Microsoft.Authorization/', guid(resourceGroup().id, deployment().name, parameters('spObjectId')))]",
+            "name": "[concat(parameters('vnetName'), '/Microsoft.Authorization/', guid(resourceGroup().id, deployment().name, parameters('spObjectId')))]",
             "properties": {
                 "roleDefinitionId": "[variables('contribRole')]",
                 "principalId":"[parameters('spObjectId')]"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
             ]
         },
         {
@@ -280,14 +298,14 @@
                 },
                 "masterProfile": {
                     "vmSize": "[parameters('masterSize')]",
-                    "subnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('controlSubnetName'))]",
+                    "subnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('controlSubnetName'))]",
                     "encryptionAtHost": "[if(parameters('encryption'), 'Enabled', 'Disabled')]"
                 },
                 "workerProfiles": [
                     {
                         "name": "worker",
                         "vmSize": "[parameters('workerSize')]",
-                        "subnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('workerSubnetName'))]",
+                        "subnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('workerSubnetName'))]",
                         "count": "[parameters('workerCount')]",
                         "diskSizeGB": "[parameters('workerDiskSize')]",
                         "encryptionAtHost": "[if(parameters('encryption'), 'Enabled', 'Disabled')]"
@@ -304,7 +322,7 @@
                 ]
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
             ]
         }
     ],
