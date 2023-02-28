@@ -153,6 +153,10 @@
         "workerSubnetCIDR": {
             "type": "string",
             "value": "[parameters('workerSubnetCIDR')]"
+        },
+        "ngwName": {
+            "type": "string",
+            "value": "[parameters('natGwName')]"
         }
     }
 }
