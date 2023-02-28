@@ -40,7 +40,17 @@
         },
         "natGwName": {
             "type": "string",
-            "defaultValue": "[concat(parameters('namePrefix'),'-ngw')]"
+            "defaultValue": "[concat(parameters('namePrefix'),'-ngw')]",
+            "metadata": {
+                "description": "Name of the NAT gateway"
+            }
+        },
+        "createNGW": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to create NAT Gateway and associated public IP"
+            }
         }
     },
     "variables": {
@@ -94,6 +104,7 @@
         {
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2022-07-01",
+            "condition": "[parameters('createNGW')]",
             "name": "[variables('gwPublicIPName')]",
             "location": "[parameters('location')]",
             "properties": {
@@ -106,6 +117,7 @@
         {
             "type": "Microsoft.Network/natGateways",
             "apiVersion": "2022-07-01",
+            "condition": "[parameters('createNGW')]",
             "name": "[parameters('natGwName')]",
             "location": "[parameters('location')]",
             "sku": {
@@ -149,6 +161,7 @@
             "value": "[parameters('workerSubnetCIDR')]"
         },
         "ngwName": {
+            "condition": "[parameters('createNGW')]",
             "type": "string",
             "value": "[parameters('natGwName')]"
         }
