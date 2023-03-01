@@ -174,6 +174,34 @@
             "metadata": {
                 "description": "Visibility of cluster ingress portal - public or private"
             }
+        },
+        "storageAccountName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), 'filesprm')]",
+            "metadata": {
+                "description": "Name for the storage account"
+            }            
+        },
+        "privateStorageEndpointName": {
+            "type": "string",
+            "defaultValue": "oms-pe-premiumstorage",
+            "metadata": {
+                "description": "Name of the private endpoint for the storage"
+            }
+        },
+        "mqsharename": {
+            "type": "string",
+            "defaultValue": "mqha",
+            "metadata": {
+                "description": "name of the Azure Premium File Share to create MQ instance"
+            }
+        },
+        "endpointSubnetCIDR": {
+            "type": "string",
+            "defaultValue": "10.0.2.0/24",
+            "metadata": {
+                "description": "CIDR for the subnet if creating"
+            }
         }
     },
     "variables": {
@@ -296,7 +324,7 @@
                 },
                 "parameters": {
                     "namePrefix": {
-                        "value": "[variables('devVMPrefix')]"
+                        "value": "[parameters('namePrefix')]"
                     },
                     "createVnet": {
                         "value": false
@@ -338,6 +366,45 @@
                     },
                     "ingressVisibility": {
                         "value": "[parameters('ingressVisibility')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployDevVM')]",
+            "name": "private-fileshare",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'), 'Storage/private-fileshare.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "namePrefix": {
+                        "value": "[parameters('namePrefix')]"
+                    },
+                    "storageAccountName": {
+                        "value": "[parameters('storageAccountName')]"
+                    },
+                    "vnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['vnetName'].value]"
+                    },
+                    "privateStorageEndpointName": {
+                        "value": "[parameters('privateStorageEndpointName')]"
+                    },
+                    "mqsharename": {
+                        "value": "[parameters('mqsharename')]"
+                    },
+                    "createSubnet": {
+                        "value": true
+                    },
+                    "subnetCIDR": {
+                        "value": "[parameters('endpointSubnetCIDR')]"
                     }
                 }
             }
