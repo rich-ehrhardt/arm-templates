@@ -131,12 +131,13 @@
     },
     "variables": {
         "vmName": "[concat(parameters('namePrefix'),'-vm')]",
-        "nsgName": "[concat(parameters('namePrefix'), '-nsg')]"
+        "nsgName": "[concat(parameters('namePrefix'), '-nsg')]",
+        "nicName": "[concat(parameters('namePrefix'),'-nic')]"
     },
     "resources": [
         {
             "type": "Microsoft.Network/virtualNetworks/subnets",
-            "apiVersion": "2021-05-01",
+            "apiVersion": "2020-11-01",
             "condition": "[parameters('createSubnet')]",
             "name": "[concat(parameters('vnetName'),'/',parameters('subnetName'))]",
             "properties": {
@@ -149,7 +150,7 @@
         {
             "type": "Microsoft.Network/networkInterfaces",
             "apiVersion": "2022-07-01",
-            "name": "[variables('vmName')]",
+            "name": "[variables('nicName')]",
             "location": "[parameters('location')]",
             "properties": {
                 "ipConfigurations": [
@@ -238,6 +239,10 @@
         "vmName": {
             "type": "string",
             "value": "[variables('vmName')]"
+        },
+        "vmNIC": {
+            "type": "object",
+            "value": "[reference(resourceId('Microsoft.Network/networkInterfaces',variables('nicName')))]"
         }
     }
 }

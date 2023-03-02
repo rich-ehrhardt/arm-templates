@@ -17,11 +17,11 @@
                 "description": "Azure location for resources"
             }
         },
-        "storageAccountName": {
+        "registryName": {
             "type": "string",
-            "defaultValue": "[concat(parameters('namePrefix'), 'filesprm')]",
+            "defaultValue": "[concat(parameters('namePrefix'), 'registry')]",
             "metadata": {
-                "description": "Name for the storage account"
+                "description": "Name of the container registry"
             }
         },
         "vnetName": {
@@ -31,18 +31,24 @@
                 "description": "Name of the virtual network"
             }
         },
-        "privateStorageEndpointName": {
+        "acrLoginServer": {
             "type": "string",
-            "defaultValue": "oms-pe-premiumstorage",
+            "defaultValue": "azurecr.io",
             "metadata": {
-                "description": "Name of the private endpoint for the storage"
+                "description": "Azure Container Registry Suffix"
             }
         },
-        "mqsharename": {
+        "registrySku": {
             "type": "string",
-            "defaultValue": "mqha",
+            "defaultValue": "Premium",
+            "allowedValues": [
+                "Basic",
+                "Classic",
+                "Standard",
+                "Premium"
+            ],
             "metadata": {
-                "description": "name of the Azure Premium File Share to create MQ instance"
+                "description": "Container Registry SKU"
             }
         },
         "deployLogAnalytics": {
@@ -89,31 +95,20 @@
         }
     },
     "variables": {
-        "storageSuffix": "core.windows.net",
-        "storageDNSZoneName": "[concat('privatelink.file.',variables('storageSuffix'))]",
-        "fileStorageAccountPrivateEndpointGroupName": "file"
     },
     "resources": [
         {
-            "type": "Microsoft.Storage/storageAccounts",
-            "apiVersion": "2021-06-01",
-            "name": "[parameters('storageAccountName')]",
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2021-09-01",
+            "name": "[parameters('registryName')]",
             "location": "[parameters('location')]",
-            "kind": "FileStorage",
             "sku": {
-                "name": "Premium_LRS"
+                "name": "[parameters('registrySku')]"
             },
             "properties": {
-                "allowSharedKeyAccess": true,
-                "minimumTlsVersion": "TLS1_2",
-                "allowBlobPublicAccess": false,
-                "supportsHttpsTrafficOnly": false,
-                "networkAcls": {
-                    "bypass": "AzureServices",
-                    "virtualNetworkRules": [],
-                    "ipRules": [],
-                    "defaultAction": "Deny"
-                }
+                "publicNetworkAccess": "Disabled",
+                "zoneRedundancy": "Disabled",
+                "adminUserEnabled": true
             }
         },
         {
@@ -135,17 +130,14 @@
         {
             "type": "Microsoft.Network/privateDnsZones",
             "apiVersion": "2020-06-01",
-            "name": "[variables('storageDNSZoneName')]",
+            "name": "[concat('privatelink.', parameters('acrLoginServer'))]",
             "location": "global",
-            "properties": {},
-            "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
-            ]
+            "properties": {}
         },
         {
             "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
             "apiVersion": "2020-06-01",
-            "name": "[concat(variables('storageDNSZoneName'),'/',parameters('vnetName'),'-link')]",
+            "name": "[concat('privatelink.', parameters('acrLoginServer'), '/', parameters('vnetName'), '-link')]",
             "location": "global",
             "properties": {
                 "registrationEnabled": false,
@@ -154,14 +146,13 @@
                 }
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
-                "[resourceId('Microsoft.Network/privateDnsZones', variables('storageDNSZoneName'))]"
+                "[resourceId('Microsoft.Network/privateDnsZones', concat('privatelink.', parameters('acrLoginServer')))]"
             ]
         },
         {
             "type": "Microsoft.Network/privateEndpoints",
             "apiVersion": "2021-03-01",
-            "name": "[parameters('privateStorageEndpointName')]",
+            "name": "oms-pe-acr",
             "location": "[parameters('location')]",
             "properties": {
                 "subnet": {
@@ -169,76 +160,36 @@
                 },
                 "privateLinkServiceConnections": [
                     {
-                        "name": "[parameters('privateStorageEndpointName')]",
                         "properties": {
-                            "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccountName'))]",
+                            "privateLinkServiceId": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]",
                             "groupIds": [
-                                "[variables('fileStorageAccountPrivateEndpointGroupName')]"
+                                "registry"
                             ]
-                        }
+                        },
+                        "name": "oms-pe-acr"
                     }
                 ]
             },
             "dependsOn": [
-               "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]"
             ]
         },
         {
             "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
             "apiVersion": "2022-07-01",
-            "name": "[concat(parameters('privateStorageEndpointName'),'/','dnsgroupname')]",
+            "name": "[concat('oms-pe-acr', '/dnsgroupname')]",
             "properties": {
                 "privateDnsZoneConfigs": [
                     {
-                        "name": "premium",
+                        "name": "registry",
                         "properties": {
-                            "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('storageDNSZoneName'))]"
+                            "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones',concat('privatelink.', parameters('acrLoginServer')))]"
                         }
                     }
                 ]
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints',parameters('privateStorageEndpointName'))]"
-            ]
-        },
-        {
-            "type": "Microsoft.Storage/storageAccounts/fileServices",
-            "apiVersion": "2021-08-01",
-            "name": "[concat(parameters('storageAccountName'),'/default')]",
-            "properties": {
-                "cors": {
-                    "corsRules": []
-                },
-                "protocolSettings": {
-                    "smb": {
-                        "multichannel": {
-                            "enabled": false
-                        }
-                    }
-                },
-                "shareDeleteRetentionPolicy": {
-                    "days": 7,
-                    "enabled": true
-                }
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
-            ]
-        },
-        {
-            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-            "apiVersion": "2021-08-01",
-            "name": "[concat(parameters('storageAccountName'),'/default/',parameters('mqsharename'))]",
-            "properties": {
-                "accessTier": "Premium",
-                "enabledProtocols": "NFS",
-                "metadata": {},
-                "rootSquash": "NoRootSquash",
-                "shareQuota": 100
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                "[resourceId('Microsoft.Network/privateEndpoints', 'oms-pe-acr')]"
             ]
         },
         {
@@ -257,66 +208,41 @@
             "type": "Microsoft.Insights/diagnosticSettings",
             "apiVersion": "2021-05-01-preview",
             "condition": "[parameters('deployLogAnalytics')]",
-            "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('storageAccountName'))]",
-            "name": "[parameters('storageAccountName')]",
-            "properties": {
-                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces',parameters('workspaceName'))]",
-                "metrics": [
-                {
-                    "category": "Transaction",
-                    "enabled": true
-                }
-                ]
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccountName'))]",
-                "[resourceId('Microsoft.OperationalInsights/workspaces',parameters('workspaceName'))]"
-            ]
-        },
-        {
-            "type": "Microsoft.Insights/diagnosticSettings",
-            "apiVersion": "2021-05-01-preview",
-            "condition": "[parameters('deployLogAnalytics')]",
-            "name": "[parameters('storageAccountName')]",
-            "scope": "[format('Microsoft.Storage/storageAccounts/{0}/fileServices/{1}', parameters('storageAccountName'), parameters('storageAccountName'))]",
+            "name": "[parameters('registryName')]",
+            "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]",
             "properties": {
                 "logAnalyticsDestinationType": "AzureDiagnostics",
                 "logs": [
                     {
-                        "category": "StorageDelete",
+                        "category": "ContainerRegistryRepositoryEvents",
                         "enabled": true
                     },
                     {
-                        "category": "StorageRead",
-                        "enabled": true
-                    },
-                    {
-                        "category": "StorageWrite",
+                        "category": "ContainerRegistryLoginEvents",
                         "enabled": true
                     }
                 ],
                 "metrics": [
                     {
-                        "category": "Transaction",
+                        "category": "AllMetrics",
                         "enabled": true
                     }
                 ],
                 "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces',parameters('workspaceName'))]"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccountName'))]",
-                "[resourceId('Microsoft.OperationalInsights/workspaces',parameters('workspaceName'))]"
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]"
             ]
         }
     ],
     "outputs": {
-        "storageAccountName": {
+        "arcName": {
             "type": "string",
-            "value": "[parameters('storageAccountName')]"
+            "value": "[parameters('registryName')]"
         },
-        "privateStorageEndpointName": {
+        "arcLoginServer": {
             "type": "string",
-            "value": "[parameters('privateStorageEndpointName')]"
+            "value": "[parameters('acrLoginServer')]"
         },
         "subnetName": {
             "condition": "[parameters('createSubnet')]",

@@ -10,11 +10,60 @@
                 "description": "Prefix for resource names"
             }
         },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Azure location for resources"
+            }
+        },
         "deployVNet": {
             "type": "bool",
             "defaultValue": true,
             "metadata": {
                 "description": "Flag to determine whether to create a virtual network"
+            }
+        },
+        "deployBastion": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create a bastion service"
+            }
+        },
+        "deployDevVM": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create dev VM"
+            }
+        },
+        "deployARO": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create the ARO cluster"
+            }
+        },
+        "deployFileShare": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to create a private file share"
+            }
+        },
+        "deployACR": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "descirption": "Flag to determine whether to create the private container registry"
+            }
+        },
+        "deployLogAnalytics": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Flag to determine whether to deploy Log Analytics"
             }
         },
         "vnetName": {
@@ -52,25 +101,11 @@
                 "description": "Name of the NAT Gateway"
             }
         },
-        "deployBastion": {
-            "type": "bool",
-            "defaultValue": true,
-            "metadata": {
-                "description": "Flag to determine whether to create a bastion service"
-            }
-        },
         "bastionSubnetCIDR": {
             "type": "string",
             "defaultValue": "10.0.6.0/24",
             "metadata": {
                 "description": "CIDR for the bastion subnet"
-            }
-        },
-        "deployDevVM": {
-            "type": "bool",
-            "defaultValue": true,
-            "metadata": {
-                "description": "Flag to determine whether to create dev VM"
             }
         },
         "devSubnetCIDR": {
@@ -98,13 +133,6 @@
             "type": "secureString",
             "metadata": {
                 "description": "Default admin password for VMs"
-            }
-        },
-        "deployARO": {
-            "type": "bool",
-            "defaultValue": true,
-            "metadata": {
-                "description": "Flag to determien whether to create the ARO cluster"
             }
         },
         "spClientId" : {
@@ -202,11 +230,44 @@
             "metadata": {
                 "description": "CIDR for the subnet if creating"
             }
+        },
+        "endpointSubnetName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'),'-endpoint-subnet')]",
+            "metadata": {
+                "description": "CIDR for the subnet if creating"
+            }
+        },
+        "registryName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), 'registry')]",
+            "metadata": {
+                "description": "Name of the container registry"
+            }
+        },
+        "registrySku": {
+            "type": "string",
+            "defaultValue": "Premium",
+            "allowedValues": [
+                "Basic",
+                "Classic",
+                "Standard",
+                "Premium"
+            ],
+            "metadata": {
+                "description": "Container Registry SKU"
+            }
+        },
+        "workspaceName": {
+            "type": "string",
+            "defaultValue": "[concat(parameters('namePrefix'), '-log-analytics-workspace')]",
+            "metadata": {
+                "description": "Name for the analytics workspace. Specify if not creating new one."
+            }
         }
     },
     "variables": {
-        "baseUrl": "https://raw.githubusercontent.com/rich-ehrhardt/arm-templates/initial-version/",
-        "devVMPrefix": "[concat(parameters('namePrefix'),'-dev')]"
+        "baseUrl": "https://raw.githubusercontent.com/rich-ehrhardt/arm-templates/initial-version/"
     },
     "resources": [
         {
@@ -282,7 +343,7 @@
                 },
                 "parameters": {
                     "namePrefix": {
-                        "value": "[variables('devVMPrefix')]"
+                        "value": "[concat(parameters('namePrefix'),'-dev')]"
                     },
                     "createSubnet": {
                         "value": true
@@ -312,6 +373,7 @@
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2021-04-01",
             "condition": "[parameters('deployARO')]",
+            "comments": "Deploys Azure Red Hat Openshift on existing VNet and subnets",
             "name": "aro",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
@@ -371,12 +433,47 @@
             }
         },
         {
-            "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2021-04-01",
-            "condition": "[parameters('deployDevVM')]",
-            "name": "private-fileshare",
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2022-10-01",
+            "comments": "Shared workspace for multiple resources",
+            "condition": "[parameters('deployLogAnalytics')]",
+            "name": "[parameters('workspaceName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "sku": {
+                    "name": "PerGB2018"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2020-11-01",
+            "comments": "This subnet is for the private endpoints of ACR and file share",
+            "condition": "[or(parameters('deployFileShare'), parameters('deployACR'))]",
+            "name": "[concat(parameters('vnetName'),'/',parameters('endpointSubnetName'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]"
+            ],
+            "properties": {
+                "addressPrefix": "[parameters('endpointSubnetCIDR')]",
+                "serviceEndpoints": [
+                    {
+                        "service": "Microsoft.ContainerRegistry"
+                    }
+                ],
+                "privateLinkServiceNetworkPolicies": "Enabled",
+                "privateEndpointNetworkPolicies": "Disabled"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployFileShare')]",
+            "name": "private-fileshare",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('endpointSubnetName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
             ],
             "properties": {
                 "mode": "Incremental",
@@ -401,10 +498,60 @@
                         "value": "[parameters('mqsharename')]"
                     },
                     "createSubnet": {
-                        "value": true
+                        "value": false
                     },
-                    "subnetCIDR": {
-                        "value": "[parameters('endpointSubnetCIDR')]"
+                    "subnetName": {
+                        "value": "[parameters('endpointSubnetName')]"
+                    },
+                    "deployLogAnalytics": {
+                        "value": "[parameters('deployLogAnalytics')]"
+                    },
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "condition": "[parameters('deployACR')]",
+            "name": "private-acr",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'virtual-network')]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('endpointSubnetName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'), 'Storage/container-registry.json')]",
+                    "contentVersion":"1.0.0.0"
+                },
+                "parameters": {
+                    "registryName": {
+                        "value": "[parameters('registryName')]"
+                    },
+                    "vnetName": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments','virtual-network')).outputs['vnetName'].value]"
+                    },
+                    "registrySku": {
+                        "value": "[parameters('registrySku')]"
+                    },
+                    "deployLogAnalytics": {
+                        "value": "[parameters('deployLogAnalytics')]"
+                    },
+                    "createAnalyticsWorkspace": {
+                        "value": false
+                    },
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    },
+                    "createSubnet": {
+                        "value": false
+                    },
+                    "subnetName": {
+                        "value": "[parameters('endpointSubnetName')]"
                     }
                 }
             }
