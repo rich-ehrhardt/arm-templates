@@ -40,7 +40,7 @@
     "resources": [
         {
             "type": "Microsoft.Network/virtualNetworks/subnets",
-            "apiVersion": "2021-05-01",
+            "apiVersion": "2020-11-01",
             "name": "[concat(parameters('vnetName'),'/',variables('bastionSubnetName'))]",
             "properties": {
                 "addressPrefix": "[parameters('bastionSubnetCIDR')]",
@@ -208,7 +208,8 @@
                 ]
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]"
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpAddressName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), variables('bastionSubnetName'))]"
             ]
         }
     ]
