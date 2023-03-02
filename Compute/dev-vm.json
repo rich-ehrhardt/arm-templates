@@ -231,7 +231,7 @@
                 "[parameters('vmZone')]"
             ],
             "dependsOn": [
-                "[resourceId('Microsoft.Network/networkInterfaces', variables('vmName'))]"
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
             ]
         }
     ],
