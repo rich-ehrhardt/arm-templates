@@ -15,6 +15,7 @@ if [[ -z $VNET_NAME ]]; then ENV_VAR_NOT_SET="VNET_NAME"; fi
 if [[ -z $SUBNET_PRIVATE_ENDPOINT_NAME ]]; then ENV_VAR_NOT_SET="SUBNET_PRIVATE_ENDPOINT_NAME"; fi
 if [[ -z $ADMIN_PASSWORD ]]; then ENV_VAR_NOT_SET="ADMIN_PASSWORD"; fi
 if [[ -z $WHICH_OMS ]]; then ENV_VAR_NOT_SET="WHICH_OMS"; fi
+if [[ -z $ACR_NAME ]]; then ENV_VAR_NOT_SET="ACR_NAME"; fi
 
 if [[ -n $ENV_VAR_NOT_SET ]]; then
     echo "ERROR: $ENV_VAR_NOT_SET not set. Please set and retry."
