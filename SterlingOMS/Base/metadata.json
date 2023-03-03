@@ -1,0 +1,10 @@
+
+{
+    "$schema": "https://aka.ms/azure-quickstart-templates-metadata-schema#",
+    "type": "Application",
+    "itemDisplayName": "IBM Sterling OMS on ARO with Postgress and IBM MQ",
+    "description": "This template deploys Sterling OMS, IBM MQ and Postgres with Azure Redhat Openshift",
+    "summary": "This template deploys Sterling OMS, IBM MQ and Postgres with Azure Redhat Openshift",
+    "githubUsername": "rich-ehrhardt",
+    "dateUpdated": "2022-02-14"
+}

@@ -1,0 +1,9 @@
+{
+    "$schema": "https://aka.ms/azure-quickstart-templates-metadata-schema#",
+    "type": "QuickStart",
+    "itemDisplayName": "Deploys an ARO cluster on existing VNet",
+    "description": "This template deploys Azure Redhat Openshift onto an existing virtual network",
+    "summary": "This template deploys Azure Redhat Openshift onto existing networking",
+    "githubUsername": "rich-ehrhardt",
+    "dateUpdated": "2022-02-22"
+}

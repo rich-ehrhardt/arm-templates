@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "namePrefix": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 10,
+            "metadata": {
+                "description": "Prefix for resource names"
+            }
+        }
+
+        
+    },
+    "variables": {
+
+    },
+    "resources": [
+        { // This resource is for tracking product deployment. 
+            "apiVersion": "2020-06-01",
+            "name": "pid-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX", // use your generated GUID here for the IBM product
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": []
+                }
+            }
+        }
+    ]
+}
+
+

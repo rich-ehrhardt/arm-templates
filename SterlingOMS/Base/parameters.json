@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "namePrefix": {
+            "value": "NAME-PREFIX"
+        },
+        "adminUserName": {
+            "value": "azureuser"
+        },
+        "adminPassword": {
+            "value": "CHANGE-ME"
+        },
+        "backupRetentionDays": {
+            "value": 7
+        },
+        "geoRedundantBackup": {
+            "value": "disabled"
+        },
+        "dbVMSize": {
+            "value": "Standard_E16ds_v4"
+        },
+        "dbStorageSizeGB": {
+            "value": 2048
+        },
+        "dbEdition": {
+            "value": "MemoryOptimized"
+        },
+        "deployLogAnalytics": {
+            "value": true
+        }
+    }
+}
